@@ -4,7 +4,7 @@ import pandas as pd
 from scrapy import Spider
 from scrapy.crawler import CrawlerProcess
 
-from eqpred.config import RAW_BULLETIN_DIR
+from eqpred.config import RAW_BULLETIN_DIR, INTERIM_BULLETIN_PATH
 
 
 _SCHEMA = {
@@ -88,3 +88,30 @@ def _parse_column(series, descriptor):
         else:
             series = series.astype("int16")
         return pd.to_numeric(series, downcast="integer")
+
+
+def update_bulletin():
+    _download_bulletin()
+
+    widths = [int(float(descriptor[1:])) for descriptor in _SCHEMA.values()]
+    names = _SCHEMA.keys()
+
+    filepaths = sorted(RAW_BULLETIN_DIR.glob("*.zip"))
+    dfs = []
+
+    for filepath in filepaths:
+        df = pd.read_fwf(
+            filepath,
+            widths=widths,
+            dtype="string[pyarrow]",
+            compression="zip",
+            names=names,
+            delimiter="\0"
+        )
+        dfs.append(df)
+
+    df = pd.concat(dfs, ignore_index=True)
+    for column in df.columns:
+        df[column] = _parse_column(df[column], _SCHEMA[column])
+
+    df.to_pickle(INTERIM_BULLETIN_PATH)
