@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pandas as pd
 from scrapy import Spider
 from scrapy.crawler import CrawlerProcess
 
@@ -59,3 +60,31 @@ def _download_bulletin():
     process = CrawlerProcess()
     process.crawl(_BulletinSpider)
     process.start()
+
+
+def _parse_column(series, descriptor):
+    type_ = descriptor[0]
+    w = int(descriptor[1:].split(".")[0])
+    d = int(descriptor[1:].split(".")[-1])
+
+    series.replace(" "*w, pd.NA, inplace=True)
+
+    if type_ == "A":
+        return series.str.rstrip().astype("category")
+
+    series = series.str.lstrip()
+    series = series.str.replace(" ", "0")
+    series = series.str.replace({"A": "-1", "B": "-2", "C": "-3"})
+
+    if type_ == "F":
+        if d == 1:
+            return series.astype("float32") / 10
+        if d == 2:
+            return series.astype("float64") / 100
+
+    if type_ == "I":
+        if series.isna().any():
+            series = series.astype("int16[pyarrow]")
+        else:
+            series = series.astype("int16")
+        return pd.to_numeric(series, downcast="integer")
