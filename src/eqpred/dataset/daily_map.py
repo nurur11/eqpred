@@ -7,6 +7,21 @@ from scrapy.crawler import CrawlerProcess
 from eqpred.config import RAW_DAILY_MAP_DIR
 
 
+_SCHEMA = {
+    "year":        (0, 4),
+    "month":       (5, 7),
+    "day":         (8, 10),
+    "hour":        (11, 13),
+    "minute":      (14, 16),
+    "second":      (17, 21),
+    "latitude":    (23, 32),
+    "longitude":   (33, 43),
+    "depth":       (45, 48),
+    "magnitude":   (52, 56),
+    "region_name": (58, 82)
+}
+
+
 class _DailyMapSpider(Spider):
     name = "daily_map"
     start_urls = ["https://www.data.jma.go.jp/eqev/data/daily_map/index.html"]
