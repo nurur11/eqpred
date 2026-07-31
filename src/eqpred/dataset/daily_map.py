@@ -1,10 +1,13 @@
+from io import StringIO
 from pathlib import Path
 from shutil import rmtree
 
+import pandas as pd
+from lxml import html
 from scrapy import Spider
 from scrapy.crawler import CrawlerProcess
 
-from eqpred.config import RAW_DAILY_MAP_DIR
+from eqpred.config import RAW_DAILY_MAP_DIR, INTERIM_DAILY_MAP_PATH
 
 
 _SCHEMA = {
@@ -43,3 +46,47 @@ def _download_daily_map():
     process = CrawlerProcess()
     process.crawl(_DailyMapSpider)
     process.start()
+
+
+def update_daily_map():
+    _download_daily_map()
+
+    colspecs = list(_SCHEMA.values())
+    names = _SCHEMA.keys()
+
+    filepaths = sorted(RAW_DAILY_MAP_DIR.glob("*.html"))
+    dfs = []
+
+    for filepath in filepaths:
+        tree = html.parse(filepath)
+        pre_text = tree.xpath("string(//pre)")
+
+        df = pd.read_fwf(
+            StringIO(pre_text),
+            colspecs=colspecs,
+            dtype="string[pyarrow]",
+            skiprows=3,
+            skip_blank_lines=True,
+            names=names,
+            delimiter="\0"
+        )
+        dfs.append(df)
+
+    df = pd.concat(dfs, ignore_index=True)
+    df["magnitude"] = df["magnitude"].replace(" -  ", pd.NA)
+    df["region_name"] = df["region_name"].str.rstrip()
+
+    df = df.astype({
+        "year":        "int16",
+        "month":       "int8",
+        "day":         "int8",
+        "hour":        "int8",
+        "minute":      "int8",
+        "second":      "float64",
+        "latitude":    "category",
+        "longitude":   "category",
+        "depth":       "int16",
+        "magnitude":   "float32",
+        "region_name": "category"
+    })
+    df.to_pickle(INTERIM_DAILY_MAP_PATH)
